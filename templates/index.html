@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Translation Demo with Qwen</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #toggleBtn {
+            background-color: #4CAF50;
+            color: white;
+            min-width: 200px;
+        }
+        #toggleBtn.recording {
+            background-color: #f44336;
+            animation: pulse 2s infinite;
+        }
+        #clearBtn {
+            background-color: #607d8b;
+            color: white;
+            margin-left: 15px;
+        }
+        #clearBtn:hover {
+            background-color: #546e7a;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+        }
+        .display-area {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .box {
+            flex: 1;
+        }
+        .box label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        .text-output {
+            width: 100%;
+            height: 300px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 16px;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
+        .status {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+            .controls {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            button {
+                width: 100%;
+                margin: 0 !important; /* Override margins */
+            }
+            .display-area {
+                flex-direction: column;
+            }
+            .text-output {
+                height: 200px; /* Smaller height on mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simultaneous Interpretation Demo (Qwen)</h1>
+        
+        <div class="controls">
+            <button id="toggleBtn">开始发言 (Start Speaking)</button>
+            <button id="clearBtn">清空文本 (Clear)</button>
+        </div>
+        
+        <div id="status" class="status">Ready</div>
+
+        <!-- Debug log area for mobile troubleshooting -->
+        <div id="debug-log" style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#999; max-height:100px; overflow-y:auto; display:none;">
+            <div>Debug Logs:</div>
+        </div>
+
+        <div class="display-area">
+            <div class="box">
+                <label>Extraction (Original):</label>
+                <div id="transcription" class="text-output"></div>
+            </div>
+            <div class="box">
+                <label>Translation (Target):</label>
+                <div id="translation" class="text-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let socket;
+        let isRecording = false;
+        // Store committed sentences (finalized) to handle streaming updates
+        let committedTranscription = "";
+
+        const toggleBtn = document.getElementById('toggleBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        const transcriptionDiv = document.getElementById('transcription');
+        const translationDiv = document.getElementById('translation');
+        const debugLogDiv = document.getElementById('debug-log');
+
+        // Simple on-screen logger
+        function log(msg) {
+            console.log(msg);
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            debugLogDiv.appendChild(line);
+            debugLogDiv.style.display = 'block'; // Show on first log
+            debugLogDiv.scrollTop = debugLogDiv.scrollHeight;
+        }
+
+        // Scroll to bottom helper
+        function scrollToBottom() {
+            transcriptionDiv.scrollTop = transcriptionDiv.scrollHeight;
+            translationDiv.scrollTop = translationDiv.scrollHeight;
+        }
+
+        clearBtn.onclick = () => {
+            transcriptionDiv.textContent = '';
+            translationDiv.textContent = '';
+            committedTranscription = "";
+            log('Cleared text.');
+        };
+
+        toggleBtn.onclick = async () => {
+            log('Button clicked. State: ' + (isRecording ? 'Stopping' : 'Starting'));
+            if (!isRecording) {
+                try {
+                    log('Requesting microphone access...');
+                    statusDiv.textContent = 'Requesting Microphone access... Check your screen for a prompt.';
+                    
+                    // Add timeout promise to warn user if it takes too long
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Permission request timed out. Please check browser settings or address bar.')), 10000)
+                    );
+                    
+                    const stream = await Promise.race([
+                        navigator.mediaDevices.getUserMedia({ audio: true }),
+                        timeoutPromise
+                    ]);
+                    
+                    log('Microphone access granted.');
+                    startRecording(stream);
+                } catch (err) {
+                    console.error('Error accessing microphone:', err);
+                    log('Error accessing microphone: ' + err.message);
+                    statusDiv.textContent = 'Error: ' + err.message;
+                    alert('Microphone Access Error:\n' + err.message + '\n\n1. Ensure URL starts with HTTPS\n2. Check Browser "Site Settings" > Microphone\n3. Do not use Wechat/In-app browsers');
+                }
+            } else {
+                stopRecording();
+            }
+        };
+
+        function getSupportedMimeType() {
+            const candidates = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus',
+                'audio/mp4', // Basic MP4 (iOS)
+                'audio/aac', // AAC
+                'audio/wav', // Fallback for raw
+                '' // Default
+            ];
+            for (const type of candidates) {
+                if (!type || MediaRecorder.isTypeSupported(type)) {
+                    return type;
+                }
+            }
+            return null;
+        }
+
+        function startRecording(stream) {
+            log('Initializing recording...');
+            // Update UI
+            toggleBtn.textContent = '停止发言 (Stop Speaking)';
+            toggleBtn.classList.add('recording');
+            statusDiv.textContent = 'Connecting...';
+
+            // Connect to WebSocket
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            socket.onopen = () => {
+                log('WebSocket open.');
+                statusDiv.textContent = 'Recording...';
+                isRecording = true;
+                
+                // Initialize MediaRecorder
+                // Request higher frequency data chunks for lower latency
+                const mimeType = getSupportedMimeType();
+                log('Selected mimeType: ' + (mimeType || 'default'));
+                if (mimeType === null) { 
+                    statusDiv.textContent = 'Current browser not supported.';
+                    log('No supported mimeType found.');
+                    stopRecording();
+                    return;
+                }
+
+                try {
+                    const options = mimeType ? { mimeType } : {};
+                    mediaRecorder = new MediaRecorder(stream, options);
+                } catch (e) {
+                    console.error('MediaRecorder error:', e);
+                    log('MediaRecorder init error: ' + e.message);
+                    statusDiv.textContent = 'MediaRecorder not supported or codec issue.';
+                    stopRecording();
+                    return;
+                }
+
+                mediaRecorder.ondataavailable = (event) => {
+                    const blob = event.data;
+                    // log('Chunk: ' + blob.size);
+                    // Only send if we have a meaningful amount of data
+                    if (blob.size > 0 && socket.readyState === WebSocket.OPEN) {
+                        socket.send(blob);
+                    }
+                };
+                
+                // Start recording
+                mediaRecorder.start(100); 
+                log('MediaRecorder started.');
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'transcription') {
+                    // Smart update: replace the current partial sentence with the new one
+                    if (data.is_final) {
+                        committedTranscription += data.content;
+                        // Add newline or punctuation spacing if needed, DashScope usually includes punctuation.
+                        // Let's ensure a newline or space separation for readability.
+                        committedTranscription += "\n"; 
+                        transcriptionDiv.textContent = committedTranscription;
+                    } else {
+                        // Display committed text + current changing partial text
+                        transcriptionDiv.textContent = committedTranscription + data.content;
+                    }
+                    scrollToBottom();
+                } else if (data.type === 'translation') {
+                    // Translations are always final chunks in this app
+                    // Append new translation directly
+                    translationDiv.textContent += data.content + "\n";
+                    scrollToBottom();
+                } else if (data.type === 'error') {
+                    console.error('Server error:', data.content);
+                    log('Server Error: ' + data.content);
+                    statusDiv.textContent = 'Error: ' + data.content;
+                }
+            };
+            
+            socket.onclose = (e) => {
+                log('WebSocket closed: ' + e.code + ' ' + e.reason);
+                if (isRecording) {
+                    stopRecording();
+                }
+            };
+            
+            socket.onerror = (err) => {
+                console.error('WebSocket error:', err);
+                log('WebSocket error occurred.');
+                statusDiv.textContent = 'WebSocket Error';
+            };
+        }
+
+        function stopRecording() {
+            log('Stopping recording...');
+            isRecording = false;
+            
+            // Update UI
+            toggleBtn.textContent = '开始发言 (Start Speaking)';
+            toggleBtn.classList.remove('recording');
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                try {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                } catch(e) { console.error(e); }
+            }
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close();
+            }
+            
+            statusDiv.textContent = 'Stopped.';
+        }
+    </script>
+</body>
+</html>

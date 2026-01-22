@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #333; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #2196F3; }
+        .stat-label { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>System Monitor</h1>
+    <div class="grid">
+        <div class="card">
+            <h2>CPU Usage</h2>
+            <div id="cpu-val" class="stat-value">0%</div>
+            <canvas id="cpuChart"></canvas>
+        </div>
+        <div class="card">
+            <h2>Memory Usage</h2>
+            <div id="mem-val" class="stat-value">0%</div>
+            <div class="stat-label">Used: <span id="mem-detail"></span></div>
+            <canvas id="memChart"></canvas>
+        </div>
+        <div class="card">
+            <h2>Network I/O</h2>
+            <p>Sent: <span id="net-sent">0</span></p>
+            <p>Recv: <span id="net-recv">0</span></p>
+        </div>
+        <div class="card">
+            <h2>App Health</h2>
+            <p>Active Threads: <span id="threads">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        const memCtx = document.getElementById('memChart').getContext('2d');
+        
+        const chartConfig = (label, color) => ({
+            type: 'line',
+            data: {
+                labels: Array(20).fill(''),
+                datasets: [{
+                    label: label,
+                    data: Array(20).fill(0),
+                    borderColor: color,
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: color + '22'
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        const cpuChart = new Chart(cpuCtx, chartConfig('CPU %', '#2196F3'));
+        const memChart = new Chart(memCtx, chartConfig('Memory %', '#4CAF50'));
+
+        function updateChart(chart, val) {
+            chart.data.datasets[0].data.shift();
+            chart.data.datasets[0].data.push(val);
+            chart.update();
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/monitor`);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            // Update CPU
+            document.getElementById('cpu-val').textContent = data.cpu + '%';
+            updateChart(cpuChart, data.cpu);
+
+            // Update Memory
+            document.getElementById('mem-val').textContent = data.memory_percent + '%';
+            document.getElementById('mem-detail').textContent = `${data.memory_used} / ${data.memory_total}`;
+            updateChart(memChart, data.memory_percent);
+
+            // Update Network
+            document.getElementById('net-sent').textContent = data.net_sent;
+            document.getElementById('net-recv').textContent = data.net_recv;
+
+            // Update Threads
+            document.getElementById('threads').textContent = data.active_threads;
+        };
+    </script>
+</body>
+</html>

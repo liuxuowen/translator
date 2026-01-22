@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+websockets
+dashscope==1.19.0
+jinja2
+python-multipart
+scipy
+numpy
+python-dotenv
+aiofiles
+psutil
+

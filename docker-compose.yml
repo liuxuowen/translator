@@ -1,0 +1,29 @@
+services:
+  translator-app:
+    build: .
+    container_name: translator-demo
+    expose:
+      - "8000"
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+    volumes:
+      - ./temp_audio:/app/temp_audio
+    restart: always
+
+  caddy:
+    image: caddy:latest
+    container_name: translator-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - translator-app
+
+volumes:
+  caddy_data:
+  caddy_config:
