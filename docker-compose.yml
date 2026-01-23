@@ -9,6 +9,8 @@ services:
     volumes:
       - ./temp_audio:/app/temp_audio
     restart: always
+    networks:
+      - caddy-net
 
   caddy:
     image: caddy:latest
@@ -23,7 +25,13 @@ services:
       - caddy_config:/config
     depends_on:
       - translator-app
+    networks:
+      - caddy-net
 
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  caddy-net:
+    external: true

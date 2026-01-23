@@ -47,6 +47,10 @@ fi
 # 3. Create temp directory if it doesn't exist (host side mapping)
 mkdir -p temp_audio
 
+# Create a shared network for Caddy to communicate with other services
+echo "Creating shared docker network 'caddy-net'..."
+sudo docker network create caddy-net || true
+
 # 4. Stop and Remove existing containers
 echo "Stopping existing containers..."
 sudo docker compose down --remove-orphans || true

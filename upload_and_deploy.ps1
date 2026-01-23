@@ -28,4 +28,4 @@ foreach ($file in $files) {
 Write-Host "Running deployment on server..." -ForegroundColor Green
 ssh -i $PemKeyPath $User@$ServerIP "cd $RemoteDir && chmod +x deploy.sh && ./deploy.sh"
 
-Write-Host "Done! Access your app at http://$ServerIP`:8000" -ForegroundColor Yellow
+Write-Host "Done!" -ForegroundColor Yellow

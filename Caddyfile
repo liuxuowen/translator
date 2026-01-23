@@ -1,3 +1,15 @@
-47.129.9.175.nip.io {
+translator.47.129.9.175.nip.io {
     reverse_proxy translator-app:8000
+}
+
+enrollment.47.129.9.175.nip.io {
+    reverse_proxy enrollment-app:8080
+}
+
+judge.47.129.9.175.nip.io {
+    reverse_proxy judge-app:8081
+}
+
+47.129.9.175.nip.io {
+    reverse_proxy homepage-app:8001
 }
