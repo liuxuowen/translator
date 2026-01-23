@@ -3,13 +3,13 @@ translator.47.129.9.175.nip.io {
 }
 
 enrollment.47.129.9.175.nip.io {
-    reverse_proxy enrollment-app:8080
+    reverse_proxy enrollment-frontend:80
 }
 
 judge.47.129.9.175.nip.io {
-    reverse_proxy judge-app:8081
+    reverse_proxy pairwise-frontend:80
 }
 
 47.129.9.175.nip.io {
-    reverse_proxy homepage-app:8001
+    reverse_proxy homepage-app:80
 }
