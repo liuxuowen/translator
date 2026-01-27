@@ -12,9 +12,16 @@ ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
-# ffmpeg might be useful for audio handling if needed in future
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
+# ffmpeg is required for audio transcoding
+# Use HTTPS mirrors and support both legacy sources.list and debian.sources
+RUN if [ -f /etc/apt/sources.list ]; then \
+        sed -i.bak -e 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list; \
+    elif [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i.bak -e 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources; \
+    fi \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container

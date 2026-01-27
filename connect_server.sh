@@ -2,7 +2,7 @@
 
 # Configuration
 SERVER_IP="47.129.9.175"
-PEM_KEY="./demo_sin.pem"  # Assumes the key is in the same directory. Update this path if your key is elsewhere (e.g., "~/Documents/demo_sin.pem")
+PEM_KEY="~/aws_sin.pem"  # Assumes the key is in the same directory. Update this path if your key is elsewhere (e.g., "~/Documents/demo_sin.pem")
 USER="admin"
 
 # Check if PEM file exists

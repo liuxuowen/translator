@@ -1,0 +1,11 @@
+services:
+  translator-app:
+    build: .
+    container_name: translator-local
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./temp_audio:/app/temp_audio
+    restart: unless-stopped
